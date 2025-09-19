@@ -9,7 +9,7 @@
 
 using namespace std;
 
-const int increment_amount = 1000;
+const int increment_amount = 10000;
 
 void increment_clock(int* sec, int* nano, int amt) {
     const long long NSEC_PER_SEC = 1000000000LL;
@@ -131,7 +131,15 @@ int main(int argc, char* argv[]) {
     }
 
     if (worker_pid == 0) {
-        char* args[] = {(char*)"./worker", (char *)to_string((int)time_limit).c_str(), (char *)to_string(seconds_conversion(time_limit)).c_str(), NULL};
+        // keep these std::string objects alive until execv runs
+        string arg_sec = to_string((int)time_limit);
+        string arg_nsec = to_string(seconds_conversion(time_limit));
+        char* args[] = {
+            (char*)"./worker",
+            const_cast<char*>(arg_sec.c_str()),
+            const_cast<char*>(arg_nsec.c_str()),
+            NULL
+        };
         execv(args[0], args);
         perror("Exec failed");
         exit(1);
