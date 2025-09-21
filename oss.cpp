@@ -9,7 +9,7 @@
 
 using namespace std;
 
-const int increment_amount = 10000;
+const int increment_amount = 1000;
 
 void increment_clock(int* sec, int* nano, int amt) {
     const long long NSEC_PER_SEC = 1000000000LL;
@@ -37,6 +37,29 @@ pid_t child_Terminated() {
         return result;
     }
     return -1;
+}
+
+void launch_worker(float time_limit) {
+    pid_t worker_pid = fork();
+    if (worker_pid < 0) {
+        cerr << "fork failed" << endl;
+        exit(1);
+    }
+
+    if (worker_pid == 0) {
+        // keep these std::string objects alive until execv runs
+        string arg_sec = to_string((int)time_limit);
+        string arg_nsec = to_string(seconds_conversion(time_limit));
+        char* args[] = {
+            (char*)"./worker",
+            const_cast<char*>(arg_sec.c_str()),
+            const_cast<char*>(arg_nsec.c_str()),
+            NULL
+        };
+        execv(args[0], args);
+        cerr << "Exec failed" << endl;
+        exit(1);
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -123,39 +146,59 @@ int main(int argc, char* argv[]) {
          << "-t: " << time_limit << endl
          << "-i: " << launch_interval << endl;
 
-    
-    pid_t worker_pid = fork();
-    if (worker_pid < 0) {
-        perror("fork failed");
-        exit(1);
-    }
+    int launched_processes = 0;
+    int running_processes = 0;
 
-    if (worker_pid == 0) {
-        // keep these std::string objects alive until execv runs
-        string arg_sec = to_string((int)time_limit);
-        string arg_nsec = to_string(seconds_conversion(time_limit));
-        char* args[] = {
-            (char*)"./worker",
-            const_cast<char*>(arg_sec.c_str()),
-            const_cast<char*>(arg_nsec.c_str()),
-            NULL
-        };
-        execv(args[0], args);
-        perror("Exec failed");
-        exit(1);
-    }
-
-    while (*sec < 10) {
+    while (launched_processes < proc || running_processes > 0) {
         increment_clock(sec, nano, increment_amount);
         //cout << "Seconds: " << *sec << " Nano: " << *nano << endl;
+
+        // checking if child has terminated
         pid_t term_pid = child_Terminated();
         if (term_pid > 0) {
-            cout << "Child process terminated. Exiting OSS. " << term_pid << endl;
+            running_processes--;
+            cout << "Child process terminated." << term_pid << endl;
         }
 
+        if (launched_processes < proc && running_processes < simul) {
+            launch_worker(time_limit);
+            launched_processes++;
+            running_processes++;
+        }
     }
+
+    cout << "Number of processes launched: " << launched_processes << endl;
 
     shmdt(clock);
     shmctl(shmid, IPC_RMID, nullptr);
     return 0;
 }
+
+
+/*
+
+        if (launched_processes < proc) {
+            launched_processes++;
+            running_processes++;
+            pid_t worker_pid = fork();
+            if (worker_pid < 0) {
+                perror("fork failed");
+                exit(1);
+            } else
+
+            if (worker_pid == 0) {
+            // keep these std::string objects alive until execv runs
+                string arg_sec = to_string((int)time_limit);
+                string arg_nsec = to_string(seconds_conversion(time_limit));
+                char* args[] = {
+                    (char*)"./worker",
+                    const_cast<char*>(arg_sec.c_str()),
+                    const_cast<char*>(arg_nsec.c_str()),
+                    NULL
+                };
+            execv(args[0], args);
+            perror("Exec failed");
+            exit(1);
+            }
+        }
+*/
