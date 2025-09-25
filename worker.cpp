@@ -27,10 +27,6 @@ int main(int argc, char* argv[]) {
 
     int *sec = &(clock[0]);
     int *nano = &(clock[1]);
-
-    // calculate start time
-    int start_seconds = *sec;
-    int start_nano = *nano;
     
     // get target time from command line args
     int target_seconds = stoi(argv[1]);
