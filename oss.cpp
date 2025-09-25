@@ -230,9 +230,11 @@ int main(int argc, char* argv[]) {
     int launched_processes = 0;
     int running_processes = 0;
 
+    long long launch_interval_nano = (long long)(launch_interval * 1e9); // convert launch interval to nanoseconds
+    long long next_launch_total = 0; 
+
     while (launched_processes < proc || running_processes > 0) {
         increment_clock(sec, nano, increment_amount);
-        //cout << "Seconds: " << *sec << " Nano: " << *nano << endl;
 
         // checking if child has terminated
         pid_t term_pid = child_Terminated();
@@ -251,16 +253,23 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        if (launched_processes < proc && running_processes < simul) {
+        // Check if it's time to launch a new worker
+        long long current_total = (long long)(*sec) * NSEC_PER_SEC + (long long)(*nano);
+        if (launched_processes < proc && running_processes < simul && current_total >= next_launch_total) {
             pid_t worker_pid = launch_worker(time_limit);
-            // find empty slot in PCB array and populate it with new process info
+
+            // Find empty slot in PCB array and populate it with new process info
             int pcb_index = find_empty_pcb(table);
             table[pcb_index].occupied = true;
             table[pcb_index].pid = worker_pid;
             table[pcb_index].start_sec = *sec;
             table[pcb_index].start_nano = *nano;
+
             launched_processes++;
             running_processes++;
+
+            // Update the next allowed launch time
+            next_launch_total = current_total + launch_interval_nano;
         }
     }
 
