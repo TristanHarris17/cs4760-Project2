@@ -19,12 +19,13 @@ struct PCB {
     int start_nano;
 };
 
-key_t sh_key;
-int shmid;
+// Globals
+key_t sh_key = ftok("oss.cpp", 0);
+int shmid = shmget(sh_key, sizeof(int)*2, IPC_CREAT | 0666);
 int *shm_clock;
 int *sec;
 vector <PCB> table(10);
-const int increment_amount = 1000;
+const int increment_amount = 10000;
 
 void increment_clock(int* sec, int* nano, int amt) {
     const long long NSEC_PER_SEC = 1000000000LL;
@@ -45,6 +46,7 @@ int seconds_conversion(float interval) {
     return nanoseconds;
 }
 
+// check if any child has terminated, return pid if so, else -1
 pid_t child_Terminated() {
     int status;
     pid_t result = waitpid(-1, &status, WNOHANG);
@@ -62,7 +64,6 @@ pid_t launch_worker(float time_limit) {
     }
 
     if (worker_pid == 0) {
-        // keep these std::string objects alive until execv runs
         string arg_sec = to_string((int)time_limit);
         string arg_nsec = to_string(seconds_conversion(time_limit));
         char* args[] = {
@@ -78,6 +79,7 @@ pid_t launch_worker(float time_limit) {
     return worker_pid;
 }
 
+// find an empty PCB slot, return index or -1 if none found
 int find_empty_pcb(const vector<PCB> &table) {
     for (size_t i = 0; i < table.size(); ++i) {
         if (!table[i].occupied) {
@@ -125,12 +127,12 @@ void print_process_table(const std::vector<PCB> &table) {
 }
 
 void signal_handler(int sig) {
-    if (sig == SIGINT) {
-        cout << "Received SIGINT, terminating all child processes..." << endl;
-        // Terminate all child processes
-        kill(0, SIGTERM); // Send SIGTERM to all processes in the same process group
+    if (sig == SIGALRM || sig == SIGINT) {
+        cout << "Received SIGALRM or SIGINT, terminating all child processes..." << endl;
+        // Terminate all child processes and clean up shared memory
         shmdt(shm_clock);
         shmctl(shmid, IPC_RMID, nullptr);
+        kill(0, SIGTERM); 
         exit(0);
     }
 }
@@ -146,7 +148,15 @@ int main(int argc, char* argv[]) {
     while((opt = getopt(argc, argv, "hn:s:t:i:")) != -1) {
         switch(opt) {
             case 'h': {
-                cout << "HELP MESSAGE" << endl;
+                cout << "Usage: oss -n proc -s simul -t time_limit -i launch_interval\n"
+                    << "Options:\n"
+                    << "  -h                Show this help message and exit\n"
+                    << "  -n proc           Total number of worker processes to launch (non-negative integer)\n"
+                    << "  -s simul          Maximum number of simultaneous worker processes (positive integer)\n"
+                    << "  -t time_limit     Time limit for each worker process in seconds (non-negative float)\n"
+                    << "  -i launch_interval Interval between launching worker processes in seconds (non-negative float)\n"
+                    << "Example:\n"
+                    << "  ./oss -n 10 -s 3 -t 2.5 -i 0.5\n";
                 exit(0);
             }
             case 'n': {
@@ -161,7 +171,7 @@ int main(int argc, char* argv[]) {
             case 's': {
                 int val = stoi(optarg);
                 if (val < 0) {
-                    cerr << "Error: -s must be a non-negative integer." << endl;
+                    cerr << "Error: -s must be a positive integer." << endl;
                     exit(1);
                 }
                 simul = val;
@@ -191,14 +201,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // create shared memory
-    sh_key = ftok("oss.cpp", 0);
-    shmid = shmget(sh_key, sizeof(int)*2, IPC_CREAT | 0666);
-    if (shmid == -1) {
-        perror("shmget");
-        exit(1);
-    }
-
     // attach shared memory to shm_ptr
     shm_clock = (int*) shmat(shmid, nullptr, 0);
     if (shm_clock == (int*) -1) {
@@ -216,7 +218,9 @@ int main(int argc, char* argv[]) {
     const long long PRINT_INTERVAL_NANO = 500000000LL;
     long long next_print_total = (long long)(*sec) * NSEC_PER_SEC + (long long)(*nano) + PRINT_INTERVAL_NANO;
 
+    // signal handling
     signal(SIGALRM, signal_handler);
+    signal(SIGINT, signal_handler);
     alarm(60);
 
     // oss staring message

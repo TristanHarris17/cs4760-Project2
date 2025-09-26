@@ -15,6 +15,8 @@ Write a function that finds the first empty pcb in the vector and returns its po
 
 Write a function that outputs the process table in a formatted way 
 
+Write a help message for this program
+
 Summary: 
 Gave me the method of storing PCB info in a vector and helped me with some syntax related to the vector library.
 Wrote both functions I asked it to with no issues.
