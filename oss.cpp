@@ -245,7 +245,7 @@ int main(int argc, char* argv[]) {
         if (term_pid > 0) {
             remove_pcb(table, term_pid);
             running_processes--;
-            cout << "Child process terminated: " << term_pid << endl;
+            cout << "OSS: Child process terminated: " << term_pid << endl;
         }
 
         // call print_process_table every half-second of simulated time
@@ -278,6 +278,7 @@ int main(int argc, char* argv[]) {
     }
 
     cout << "Number of processes launched: " << launched_processes << endl;
+    cout << "Workers ran for a combined total of " << *sec << " seconds and " << *nano << " nanoseconds." << endl;
 
     shmdt(shm_clock);
     shmctl(shmid, IPC_RMID, nullptr);
